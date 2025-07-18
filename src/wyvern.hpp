@@ -33,6 +33,8 @@
 
 namespace wyvern {
 
+inline bool DO_NOT_LOAD = false;
+
 class Wrapper;
 
 // Binary and Unary Operations
@@ -848,7 +850,7 @@ public:
      * 
      * @param value Value to return
      * @param next (optional) Next insertion point
-     * @return ReturnInst * - Return Instruction returned from llvm::IRBuilder
+     * @return Return Instruction returned from llvm::IRBuilder
      */
     llvm::ReturnInst *createRet(const Entity::Ptr &value, llvm::BasicBlock *next = nullptr) const;
 
@@ -857,9 +859,17 @@ public:
      * 
      * @param value Value to return
      * @param next (optional) Next insertion point
-     * @return ReturnInst * - Return Instruction returned from llvm::IRBuilder
+     * @return Return Instruction returned from llvm::IRBuilder
      */
     llvm::ReturnInst *createRet(llvm::Constant *value, llvm::BasicBlock *next = nullptr) const;
+
+    /**
+     * @brief Create a return void instruction.
+     *
+     * @param next (optional) Next insertion point.
+     * @return Return Instruction returned from llvm::IRBuilder
+     */
+    llvm::ReturnInst *createRetVoid(llvm::BasicBlock *next = nullptr) const;
 
     /**
      * @brief Create a block and set the insert point to it.

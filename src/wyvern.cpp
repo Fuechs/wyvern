@@ -1008,6 +1008,13 @@ ReturnInst *Wrapper::createRet(Constant *value, BasicBlock *next) const {
     return inst;
 }
 
+ReturnInst *Wrapper::createRetVoid(BasicBlock *next) const {
+    ReturnInst *inst = builder->CreateRetVoid();
+    if (next)
+        builder->SetInsertPoint(next);
+    return inst;
+}
+
 BasicBlock *Wrapper::createBlock(const std::string &name, const bool insert) const {
     BasicBlock *BB = BasicBlock::Create(*context, name, **parent);
     if (insert)
@@ -1268,7 +1275,7 @@ std::pair<Value *, Ty::Ptr> process(const Entity::Ptr &entity, bool load) {
         case Entity::VALUE: {
             auto convert = std::static_pointer_cast<Val>(entity);
 
-            if (convert->isImmediate() || !load)
+            if (convert->isImmediate() || !load || DO_NOT_LOAD)
                 return { convert->getValuePtr(), convert->getTy() };
 
             auto deref = convert->dereference();
@@ -1277,8 +1284,12 @@ std::pair<Value *, Ty::Ptr> process(const Entity::Ptr &entity, bool load) {
         case Entity::LOCAL: {
             Value *value;
             auto convert = std::static_pointer_cast<Local>(entity);
-            if (load) value = convert->dereference()->getValuePtr();
-            else      value = convert->getPtr();
+
+            if (!DO_NOT_LOAD && load)
+                value = convert->dereference()->getValuePtr();
+            else
+                value = convert->getPtr();
+
             return { value, convert->getTy() };
         }
         case Entity::ARG: {
