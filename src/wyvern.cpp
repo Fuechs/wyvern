@@ -800,11 +800,37 @@ void Wrapper::initialize() {
     initializeTarget(*registry);
 }
 
-Wrapper::Ptr Wrapper::create(const std::string &moduleID, const std::string &targetTriple) {
+Wrapper::Wrapper(LLVMContext *context, Module *module, IRBuilder<> *builder) {
+    this->context = context;
+    this->module = module;
+    this->builder = builder;
+    parent = nullptr;
+    functions = Func::Map();
+    structs = Struct::Map();
+
+    module->setTargetTriple(Triple(sys::getDefaultTargetTriple()));
+
+    std::string err;
+    const Target *target = TargetRegistry::lookupTarget(module->getTargetTriple(), err);
+    if (!target)
+        complain("Wrapper::Wrapper(): Failed to find target: "+err);
+
+
+    auto targetOptions = TargetOptions();
+    targetOptions.FloatABIType = FloatABI::Hard;
+
+    std::unique_ptr<TargetMachine> targetMachine(
+        target->createTargetMachine(module->getTargetTriple(),
+            "generic", "", targetOptions, std::nullopt));
+    if (!targetMachine)
+        complain("Wrapper::Wrapper(): Failed to create target machine.");
+
+    module->setDataLayout(targetMachine->createDataLayout());
+}
+
+Wrapper::Ptr Wrapper::create(const std::string &moduleID) {
     const auto context = new LLVMContext();
-    // has to be this way because std::shared_ptr / make_shared cannot access the private constructor,
-    // neither should the user be able to
-    return Ptr(new Wrapper(context, new Module(moduleID, *context), new IRBuilder<>(*context), targetTriple));
+    return std::make_shared<Wrapper>(context, new Module(moduleID, *context), new IRBuilder<>(*context));
 }
 
 void Wrapper::dump(raw_fd_ostream &os) const { module->print(os, nullptr); }
@@ -924,8 +950,8 @@ Val::Ptr Wrapper::createValue(const Ty::Ptr &type, Value *value) {
 }
 
 StoreInst *Wrapper::storeValue(const Entity::Ptr &local, const Entity::Ptr &value) const {
-    auto [local_raw, local_type] = process(local, false);
-    auto [value_raw, _] = process(value, false);
+    auto [local_raw, local_type] = process(local);
+    auto [value_raw, _] = process(value);
 
     if (!local_type->isPtrTy())
         return complain("Wrapper::storeValue(): Entity is not a pointer.");
@@ -959,7 +985,7 @@ Local::Ptr Wrapper::allocateStruct(const std::string &typeName, const std::strin
 }
 
 Val::Ptr Wrapper::getElementPtr(const Entity::Ptr &parent, const size_t index, const std::string &name) {
-    const auto &[raw, type] = process(parent, false);
+    const auto &[raw, type] = process(parent);
 
     if (!type->isPtrTy())
         complain("Wrapper::getElementPtr(): Type of parent is not a pointer.");
@@ -1082,7 +1108,7 @@ Val::Ptr Wrapper::binaryOp(const Op op, const Entity::Ptr &LHS, const Entity::Pt
 }
 
 Val::Ptr Wrapper::bitCast(const Entity::Ptr &ptr, const Ty::Ptr &to, const std::string &name) {
-    Value *value = process(ptr, false).first;
+    Value *value = process(ptr).first;
     Value *cast = builder->CreateBitCast(value, to->getTy(), name);
     return createValue(to, cast);
 }
@@ -1156,21 +1182,21 @@ Val::Ptr Wrapper::typeCast(const Entity::Ptr &value, const Ty::Ptr &to, const st
 }
 
 Val::Ptr Wrapper::getArrayElement(const Entity::Ptr &array, size_t index, const std::string &name) {
-    auto [raw, ty] = process(array, false);
+    auto [raw, ty] = process(array);
     Value *ptr = builder->CreateGEP(ty->getTy(), raw,{**getInt(32, index)}, name);
     return createValue(ty, ptr);
 }
 
 Val::Ptr Wrapper::getArrayElement(const Entity::Ptr &array, const Entity::Ptr &index, const std::string &name) {
-    auto [raw, ty] = process(array, false);
-    Value *index_value = process(index, false).first;
+    auto [raw, ty] = process(array);
+    Value *index_value = process(index).first;
 
     Value *ptr = builder->CreateGEP(ty->getTy(), raw, {index_value}, name);
     return createValue(ty, ptr);
 }
 
 Val::Ptr Wrapper::compareToNull(const Entity::Ptr &pointer, const std::string &name) {
-    auto [ptr, ty] = process(pointer, false);
+    auto [ptr, ty] = process(pointer);
 
     if (!ty->isPtrTy())
         complain("Wrapper::compareToNull(): Entity is not a pointer.");
@@ -1242,55 +1268,15 @@ void Wrapper::setParent(Func::Ptr func) { parent = std::move(func); }
 
 /// PRIVATE ///
 
-Wrapper::Wrapper(LLVMContext *context, Module *module, IRBuilder<> *builder, const std::string &targetTriple) {
-    this->context = context;
-    this->module = module;
-    this->builder = builder;
-    parent = nullptr;
-    functions = Func::Map();
-    structs = Struct::Map();
-
-    auto targetOptions = TargetOptions();
-    targetOptions.FloatABIType = FloatABI::Hard;
-    const TargetMachine *targetMachine = nullptr;
-
-    if (targetTriple.empty()) {
-        auto engineBuilder = EngineBuilder();
-        engineBuilder.setTargetOptions(targetOptions);
-        targetMachine = engineBuilder.selectTarget();
-    } else {
-        std::string error;
-        const Target *target = TargetRegistry::lookupTarget(targetTriple, error);
-        if (!target)
-            complain("TargetRegistry::lookupTarget() failed: " + error);
-        targetMachine = target->createTargetMachine(targetTriple, "generic", "", targetOptions, {});
-    }
-
-    module->setTargetTriple(targetMachine->getTargetTriple().str());
-    module->setDataLayout(targetMachine->createDataLayout());
-}
-
-std::pair<Value *, Ty::Ptr> process(const Entity::Ptr &entity, bool load) {
+std::pair<Value *, Ty::Ptr> process(const Entity::Ptr &entity) {
     switch (entity->kind()) {
         case Entity::VALUE: {
             auto convert = std::static_pointer_cast<Val>(entity);
-
-            if (convert->isImmediate() || !load || DO_NOT_LOAD)
-                return { convert->getValuePtr(), convert->getTy() };
-
-            auto deref = convert->dereference();
-            return { deref->getValuePtr(), deref->getTy() };
+            return { convert->getValuePtr(), convert->getTy() };
         }
         case Entity::LOCAL: {
-            Value *value;
             auto convert = std::static_pointer_cast<Local>(entity);
-
-            if (!DO_NOT_LOAD && load)
-                value = convert->dereference()->getValuePtr();
-            else
-                value = convert->getPtr();
-
-            return { value, convert->getTy() };
+            return { convert->getPtr(), convert->getTy() };
         }
         case Entity::ARG: {
             auto convert = std::static_pointer_cast<Arg>(entity);

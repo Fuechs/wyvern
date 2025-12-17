@@ -24,6 +24,7 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
+#include <llvm/TargetParser/Host.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
@@ -32,8 +33,6 @@
 // TODO: remove useless functions (all should just accept Entity instead of Local, Val, etc)
 
 namespace wyvern {
-
-inline bool DO_NOT_LOAD = false;
 
 class Wrapper;
 
@@ -636,7 +635,8 @@ public:
     // Initialize the LLVM API
     static void initialize();
 
-    static Ptr create(const std::string &moduleID, const std::string &targetTriple = "");
+    Wrapper(llvm::LLVMContext *context, llvm::Module *module, llvm::IRBuilder<> *builder);
+    static Ptr create(const std::string &moduleID);
 
     // dump the generated LLVM IR
     void dump(llvm::raw_fd_ostream &os = llvm::errs()) const;
@@ -1040,7 +1040,7 @@ public:
      * @param warn Throw an error if the function isn't found (false -> just returns nullptr)
      * @return Func::Ptr - Pointer to the found function.
      */
-    Func::Ptr getFunc(const std::string &name, bool warn = true);
+    Func::Ptr getFunc(const std::string &name, bool warn = false);
 
     /**
      * @brief Set the current parent
@@ -1050,8 +1050,6 @@ public:
     void setParent(Func::Ptr func);
 
 private:
-    Wrapper(llvm::LLVMContext *context, llvm::Module *module, llvm::IRBuilder<> *builder, const std::string &targetTriple);
-
     llvm::LLVMContext *context;
     llvm::Module *module;
     llvm::IRBuilder<> *builder;
@@ -1065,8 +1063,7 @@ private:
 
 
 // get the llvm::Value and type of entity for operations
-// load: whether a Local should be loaded
-static std::pair<llvm::Value *, Ty::Ptr> process(const Entity::Ptr &entity, bool load = true);
+static std::pair<llvm::Value *, Ty::Ptr> process(const Entity::Ptr &entity);
 
 std::nullptr_t complain(const std::string&);
 
