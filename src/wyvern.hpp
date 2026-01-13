@@ -3,7 +3,7 @@
  * @brief Wyvern LLVM API Wrapper header
  * @version 0.1
  * 
- * @copyright Copyright (c) 2023-2025, Ari.
+ * @copyright Copyright (c) 2023-2026, Ari.
  * 
  */
 
@@ -28,7 +28,6 @@
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
-
 
 // TODO: remove useless functions (all should just accept Entity instead of Local, Val, etc)
 
@@ -923,7 +922,7 @@ public:
      * @param else_ (optional) The `else` block
      * @return BranchInst *
      */
-    llvm::BranchInst *jump(const Val::Ptr &condition, llvm::BasicBlock *then, llvm::BasicBlock *else_ = nullptr) const;
+    llvm::BranchInst *jump(const Entity::Ptr &condition, llvm::BasicBlock *then, llvm::BasicBlock *else_ = nullptr) const;
 
     /**
      * @brief Type cast a value.
@@ -1056,6 +1055,7 @@ private:
 
     Func::Ptr parent; // current parent function
 
+    Local::Map globals;
     Func::Map functions;
     Struct::Map structs;
     Ty::Vec types;

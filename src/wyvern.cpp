@@ -3,7 +3,7 @@
  * @brief Wyvern LLVM API Wrapper implementation
  * @version 0.1
  * 
- * @copyright Copyright (c) 2023-2025, Ari.
+ * @copyright Copyright (c) 2023-2026, Ari.
  * 
  */
 
@@ -562,7 +562,7 @@ Array::Array(Wrapper::Ptr wrapper, const Ty::Ptr &elementTy, const std::string &
     this->elementTy = elementTy;
     this->bufferTy = elementTy->getPtrTo();
     this->self = wrapper->declareStruct(name, {
-        bufferTy,                   // TYPE* buffer
+        bufferTy,                 // TYPE* buffer
         wrapper->getSizeTy(),     // i64 size
         wrapper->getSizeTy(),     // i64 max
         wrapper->getSizeTy(),     // i64 factor
@@ -805,6 +805,7 @@ Wrapper::Wrapper(LLVMContext *context, Module *module, IRBuilder<> *builder) {
     this->module = module;
     this->builder = builder;
     parent = nullptr;
+    globals = Local::Map();
     functions = Func::Map();
     structs = Struct::Map();
 
@@ -1113,8 +1114,8 @@ Val::Ptr Wrapper::bitCast(const Entity::Ptr &ptr, const Ty::Ptr &to, const std::
     return createValue(to, cast);
 }
 
-BranchInst *Wrapper::jump(const Val::Ptr &condition, BasicBlock *then, BasicBlock *else_) const {
-    return builder->CreateCondBr(condition->getValuePtr(), then, else_);
+BranchInst *Wrapper::jump(const Entity::Ptr &condition, BasicBlock *then, BasicBlock *else_) const {
+    return builder->CreateCondBr(process(condition).first, then, else_);
 }
 
 Val::Ptr Wrapper::typeCast(const Entity::Ptr &value, const Ty::Ptr &to, const std::string &name) {
