@@ -343,38 +343,10 @@ public:
      * @brief Dereference the stored value of the local. 
      * (Allocations are always created as pointers.)
      *
-     * If `isImmediate` is set to false, the dereferenced value will still be technically
-     * treated as an allocation instruction, and thus is automatically dereferenced again
-     * when used in an operation.
-     *
-     * This is necessary if one doesn't want to handle certain cases manually
-     * when generating code involving pointers; The compiler otherwise would
-     * have to differentiate between dereferences and e.g., only dereference
-     * once for assignments, as the store instruction still requires a pointer,
-     * while other instructions require the immediate value stored at the pointer,
-     * which thus would have to be dereferenced twice.
-     * <code>
-     * int *x;
-     * *x = *x + 1;
-     * </code>
-     *
-     * The C++ code above looks roughly like this in LLVM IR:
-     * (without intrinsic types and initialization for readability)
-     * <code>
-     * %x = alloca i32**                        ; declaration; note that it declares i32**, while the original C++ code declared i32* (int*)
-     * %x_load = load i32*, i32** %x            ; first load
-     * %x_load_load = load i32, i32* %x_load    ; second load; the actual value stored at the address x
-     * %add = add i32 1, i32 %x_load_load       ; addition
-     * store i32 %add, i32* %x_load             ; store; the result is assigned to x
-     *                 ^^^^^^^^^^^^ the store instruction requires the pointer to the value stored at x,
-     *                              while the addition required the actual value
-     * </code>
-     *
-     * @param isImmediate (optional) Whether the result should be automatically dereferenced (again) in operations (true -> NO)
      * @param name (optional) Name of the dereferenced value
      * @return The dereferenced local
      */
-    Val::Ptr dereference(bool isImmediate = true, const std::string &name = "");
+    Val::Ptr dereference(const std::string &name = "");
 
     /**
      * @brief This function should be called automatically when trying to access the value of the Local.

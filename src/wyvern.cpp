@@ -262,11 +262,11 @@ Ty::Ptr Local::getTy() { return type; }
 
 std::string Local::getName() const { return ptr->getName().str(); }
 
-Val::Ptr Local::dereference(bool isImmediate, const std::string &name) {
+Val::Ptr Local::dereference(const std::string &name) {
     initialize();
 
     LoadInst *load = wrapper->getBuilder()->CreateLoad(type->getTy(), ptr, name);
-    return Val::create(wrapper, type, load, isImmediate);
+    return Val::create(wrapper, type, load);
 } 
 
 void Local::initialize() {
